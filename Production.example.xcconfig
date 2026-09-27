@@ -1,0 +1,4 @@
+// Copy this file to a non-secret production configuration or set this value in
+// Xcode's Release build settings after deploying Backend/.
+TEMPO_API_BASE_URL = https://YOUR-WORKER.workers.dev
+INFOPLIST_KEY_TEMPO_API_BASE_URL = $(TEMPO_API_BASE_URL)
