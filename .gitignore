@@ -1,0 +1,11 @@
+Configuration.xcconfig
+Secrets.xcconfig
+Footballlive/Secrets.plist
+xcuserdata/
+*.xcuserstate
+DerivedData/
+.build/
+build/
+.DS_Store
+Backend/.dev.vars
+Backend/.wrangler/
