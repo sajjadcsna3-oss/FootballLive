@@ -1,14 +1,15 @@
 import Foundation
 
 enum NetworkError: LocalizedError, Equatable {
-    case missingConfiguration(String), offline, invalidResponse, unauthorized, rateLimited, server(Int), decoding(String)
+    case missingConfiguration(String), offline, invalidResponse, unauthorized, rateLimited, serviceUnavailable, server(Int), decoding(String)
     var errorDescription: String? {
         switch self {
-        case .missingConfiguration(let key): return "Add \(key) to the scheme environment or local xcconfig."
+        case .missingConfiguration(let key): return "The app's \(key) service is not configured. Please contact support."
         case .offline: return "You're offline. Check your internet connection."
         case .invalidResponse: return "The server returned an invalid response."
         case .unauthorized: return "The API key was rejected."
-        case .rateLimited: return "The API rate limit was reached. Please try again later."
+        case .rateLimited: return "The service request limit was reached. Please wait and try again."
+        case .serviceUnavailable: return "The service is temporarily unavailable. Please try again later."
         case .server(let code): return "The server returned error \(code)."
         case .decoding(let message): return "Unable to read API data: \(message)"
         }
@@ -44,6 +45,7 @@ actor NetworkService {
                 case 200..<300: return data
                 case 401, 403: throw NetworkError.unauthorized
                 case 429: throw NetworkError.rateLimited
+                case 502, 503, 504: throw NetworkError.serviceUnavailable
                 default: throw NetworkError.server(http.statusCode)
                 }
             } catch let error as URLError {

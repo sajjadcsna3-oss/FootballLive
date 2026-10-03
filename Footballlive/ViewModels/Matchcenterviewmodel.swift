@@ -18,12 +18,11 @@ import Combine
         if !force, fixture?.id == selected.id, state == .loaded { return }
         state = .loading
         do {
-            async let details = service.fixture(id: selected.id)
-            async let eventData = service.events(id: selected.id)
-            async let cardData = service.cards(id: selected.id)
-            async let substitutionData = service.substitutions(id: selected.id)
+            let loadedFixture = try await service.fixture(id: selected.id)
+            async let eventData = service.events(id: selected.id, fixture: loadedFixture)
+            async let cardData = service.cards(id: selected.id, fixture: loadedFixture)
+            async let substitutionData = service.substitutions(id: selected.id, fixture: loadedFixture)
             async let statsData = service.statistics(id: selected.id)
-            let loadedFixture = try await details
             let combinedEvents = ((try? await eventData) ?? []) + ((try? await cardData) ?? []) + ((try? await substitutionData) ?? [])
             let loadedEvents = Array(Dictionary(grouping: combinedEvents, by: { "\($0.minute ?? -1)|\($0.type)|\($0.playerName ?? "")|\($0.detail ?? "")" }).compactMap { $0.value.first })
             let loadedStats = (try? await statsData) ?? []

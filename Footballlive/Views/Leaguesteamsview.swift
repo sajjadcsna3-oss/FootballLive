@@ -139,6 +139,10 @@ struct LeaguesView: View {
         }.buttonStyle(.plain)
     }
     private var aiTableRead: some View {
+        Group {
+        if !AIConsentService.shared.hasConsent {
+            AIConsentNotice()
+        } else {
         Card(highlight: true) {
             VStack(alignment: .leading, spacing: 9) {
                 Mono(text: "AI Table Read", color: AppColors.lime)
@@ -150,11 +154,17 @@ struct LeaguesView: View {
                 case .offline: Text("You're offline.").font(.system(size: 10)).foregroundColor(AppColors.muted)
                 case .failed(let message):
                     Text(message).font(.system(size: 10)).foregroundColor(AppColors.red)
-                    PillButton(title: "Retry") { Task { await vm.generateTableRead() } }
-                default: PillButton(title: "Generate grounded read") { Task { await vm.generateTableRead() } }
+                    PillButton(title: "Retry") { generateTableRead() }
+                default: PillButton(title: "Generate grounded read") { generateTableRead() }
                 }
             }
         }
+        }
+        }
+    }
+    private func generateTableRead() {
+        guard EntitlementService.shared.canUseAI else { app.openPremium(); return }
+        Task { await vm.generateTableRead() }
     }
     private func tableMessage(_ text: String) -> some View { Text(text).font(.system(size: 11)).foregroundColor(AppColors.muted).frame(maxWidth: .infinity).padding(40) }
     private func positionColor(_ position: Int) -> Color { position <= 4 ? AppColors.lime : position <= 6 ? AppColors.blue : Color.clear }
@@ -195,7 +205,9 @@ struct TeamDetailView: View {
                             Text([team.country, team.founded.map { "Est. \($0)" }].compactMap { $0 }.joined(separator: " · ")).foregroundColor(AppColors.muted)
                         }
                         Spacer()
-                        PillButton(title: vm.isFollowing ? "Following" : "Follow", filled: !vm.isFollowing) { vm.toggleFollow() }.fixedSize()
+                        PillButton(title: vm.isFollowing ? "Following" : "Follow", filled: !vm.isFollowing) {
+                            if !vm.toggleFollow() { app.openPremium() }
+                        }.fixedSize()
                     }.padding(20).background(AppColors.card)
                     if let message = vm.followMessage { Text(message).font(.system(size: 10)).foregroundColor(AppColors.lime).frame(maxWidth: .infinity, alignment: .trailing) }
                     HStack(alignment: .top, spacing: 16) {

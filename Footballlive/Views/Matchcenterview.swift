@@ -48,7 +48,38 @@ struct MatchLineupsView: View {
 
 struct MatchHeaderView: View {
     let fixture: Fixture
-    var body: some View { VStack(spacing: 8) { HStack(spacing: 22) { team(fixture.homeTeam, alignment: .trailing); Text("\(fixture.homeScore.map(String.init) ?? "–") : \(fixture.awayScore.map(String.init) ?? "–")").font(.system(size: 30, weight: .bold, design: .monospaced)); team(fixture.awayTeam, alignment: .leading) }.foregroundColor(AppColors.text); Text(fixture.displayStatus).font(.system(size: 9, design: .monospaced)).foregroundColor(fixture.isLive ? AppColors.red : AppColors.muted).padding(.horizontal, 10).padding(.vertical, 4).background(Capsule().fill(AppColors.red.opacity(0.12))) }.frame(maxWidth: .infinity).padding(.vertical, 26).background(LinearGradient(colors: [Color(hex: "1A1E24"), AppColors.bg], startPoint: .top, endPoint: .bottom)) }
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 22) {
+                team(fixture.homeTeam, alignment: .trailing)
+                Text("\(fixture.homeScore.map(String.init) ?? "–") : \(fixture.awayScore.map(String.init) ?? "–")")
+                    .font(.system(size: 30, weight: .bold, design: .monospaced))
+                team(fixture.awayTeam, alignment: .leading)
+            }
+            .foregroundColor(AppColors.text)
+            Text(fixture.displayStatus)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(fixture.isLive ? AppColors.red : AppColors.muted)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(AppColors.red.opacity(0.16)))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 26)
+        .background {
+            ZStack {
+                Image("StadiumHeader")
+                    .resizable()
+                    .scaledToFill()
+                LinearGradient(
+                    colors: [Color.black.opacity(0.45), Color.black.opacity(0.76), AppColors.bg.opacity(0.94)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+        }
+        .clipped()
+    }
     private func team(_ team: Team, alignment: HorizontalAlignment) -> some View { VStack(alignment: alignment, spacing: 5) { RemoteBadge(url: team.badgeURL, name: team.name, size: 32); Text(team.name).font(.system(size: 18, weight: .bold)) } }
 }
 

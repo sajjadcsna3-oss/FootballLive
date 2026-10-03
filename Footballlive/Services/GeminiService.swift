@@ -44,6 +44,7 @@ actor GeminiService {
     private struct BackendResponse: Decodable { let answer: String }
 
     func answer(question: String, context: String) async throws -> String {
+        guard await AIConsentService.shared.hasConsent else { throw AIServiceError.consentRequired }
         if let backend = APIConfiguration.backendBaseURL {
             let url = backend.appending(path: "v1/ai/commentary")
             var request = URLRequest(url: url)
@@ -51,9 +52,11 @@ actor GeminiService {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONEncoder().encode(BackendRequest(question: question, context: context))
             let data = try await network.data(for: request)
-            return try JSONDecoder().decode(BackendResponse.self, from: data).answer
+            let answer = try JSONDecoder().decode(BackendResponse.self, from: data).answer.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !answer.isEmpty else { throw AIServiceError.emptyResponse }
+            return answer
         }
-        guard let key = APIConfiguration.geminiAPIKey else { throw NetworkError.missingConfiguration("GEMINI_API_KEY") }
+        guard let key = APIConfiguration.geminiAPIKey else { throw NetworkError.missingConfiguration("AI") }
         let modelPath = "models/\(APIConfiguration.geminiModel):generateContent"
         var components = URLComponents(url: APIConfiguration.geminiBaseURL, resolvingAgainstBaseURL: false)!
         components.path = APIConfiguration.geminiBaseURL.path + "/" + modelPath
@@ -69,13 +72,26 @@ actor GeminiService {
         ))
         let data = try await network.data(for: request)
         let response = try JSONDecoder().decode(ResponseBody.self, from: data)
-        if let answer = response.candidates?.first?.content.parts.compactMap(\.text).joined(separator: "\n"), !answer.isEmpty { return answer }
+        if let raw = response.candidates?.first?.content.parts.compactMap(\.text).joined(separator: "\n") {
+            let answer = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !answer.isEmpty { return answer }
+        }
         if let reason = response.promptFeedback?.blockReason { throw GeminiError.blocked(reason) }
-        throw NetworkError.invalidResponse
+        throw AIServiceError.emptyResponse
     }
 
     enum GeminiError: LocalizedError {
         case blocked(String)
         var errorDescription: String? { switch self { case .blocked(let reason): return "Gemini blocked this request: \(reason)." } }
+    }
+
+    enum AIServiceError: LocalizedError {
+        case consentRequired, emptyResponse
+        var errorDescription: String? {
+            switch self {
+            case .consentRequired: return "Review and accept the AI privacy disclosure before using AI features."
+            case .emptyResponse: return "The AI service returned an empty response. Please try again later."
+            }
+        }
     }
 }

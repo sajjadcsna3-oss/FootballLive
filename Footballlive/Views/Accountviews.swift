@@ -11,13 +11,21 @@ import StoreKit
 // MARK: - Shared list of alert toggles (used by Follow Setup and Alerts & Profile)
 struct AlertToggleList: View {
     @EnvironmentObject var account: AccountViewModel
+    @EnvironmentObject var app: AppViewModel
+    @EnvironmentObject var entitlements: EntitlementService
     let kinds: [AlertKind]
     var body: some View {
         Divided {
             ForEach(kinds) { k in
                 SettingToggle(title: k.info.title, subtitle: k.info.subtitle, isOn: account.binding(for: k))
-                    .disabled(!k.clientAvailable || (k == .surge && !EntitlementService.shared.isPro))
-                    .opacity(k.clientAvailable && (k != .surge || EntitlementService.shared.isPro) ? 1 : 0.55)
+                    .disabled(!k.clientAvailable || (k == .surge && !entitlements.isPro))
+                    .opacity(k.clientAvailable && (k != .surge || entitlements.isPro) ? 1 : 0.55)
+                    .overlay {
+                        if k == .surge && !entitlements.isPro {
+                            Button { app.openPremium() } label: { Color.clear.contentShape(Rectangle()) }
+                                .buttonStyle(.plain)
+                        }
+                    }
                 if k != kinds.last { Divider().overlay(AppColors.border) }
             }
         }
@@ -36,12 +44,12 @@ struct AlertsProfileView: View {
                     Card(highlight: true) {
                         VStack(alignment: .leading, spacing: 10) {
                             Text("Excitement threshold").font(.system(size: 12, weight: .semibold)).foregroundColor(AppColors.text)
-                            Text("Only get pinged when the momentum engine says a match is worth looking up from your desk.").font(.system(size: 10)).foregroundColor(AppColors.muted)
+                            Text("Momentum alerts are evaluated when you open or refresh a match. Goal alerts require the app to be running and receiving live-score updates.").font(.system(size: 10)).foregroundColor(AppColors.muted)
                             HStack(spacing: 12) { ThresholdSlider(value: $account.threshold); Text(account.thresholdText).font(.system(size: 14, weight: .bold, design: .monospaced)).foregroundColor(AppColors.lime) }
                             HStack { Mono(text: "Everything", size: 7); Spacer(); Mono(text: "Only the good stuff", size: 7); Spacer(); Mono(text: "Finals only", size: 7) }
                         }
                     }
-                    AlertToggleList(kinds: AlertKind.allCases)
+                    AlertToggleList(kinds: [.goals, .surge, .startingSoon, .recap])
                 }
                 VStack(spacing: 14) {
                     Card { VStack(spacing: 8) {
@@ -86,13 +94,14 @@ struct SettingsView: View {
     @EnvironmentObject var app: AppViewModel
     @ObservedObject private var store = StoreKitService.shared
     @Environment(\.requestReview) private var requestReview
+    @EnvironmentObject private var aiConsent: AIConsentService
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if !account.isPro { HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Unlock the full Tempo read").font(.system(size: 14, weight: .bold)).foregroundColor(AppColors.text)
-                        Text("Unlimited AI requests, followed teams, and momentum-surge alerts.").font(.system(size: 10)).foregroundColor(AppColors.muted)
+                        Text("Higher AI usage, unlimited followed teams, and in-app momentum alerts.").font(.system(size: 10)).foregroundColor(AppColors.muted)
                     }
                     Spacer()
                     PillButton(title: account.isPro ? "Tempo Pro active" : "View plans") { app.open(.pro) }.frame(width: 150)
@@ -104,7 +113,7 @@ struct SettingsView: View {
                     toggleRow("DK", "Dark appearance", "Tempo is designed dark; light mode is high-contrast only", $account.darkAppearance)
                     toggleRow("DN", "Compact rows", "Fit roughly four more matches per screen", $account.compactRows)
                     toggleRow("AP", "Autoplay highlights", "Play the next clip automatically in the player", $account.autoplayHighlights)
-                    toggleRow("MB", "Menu-bar live score", "Keep one followed match in the macOS menu bar", $account.menuBarScore)
+                    toggleRow("MB", "Menu-bar live scores", "Show the current live-match count and recent live fixtures", $account.menuBarScore)
                     languageRow
                     kickoffRow
                     if !account.isPro { actionRow("RS", "Restore purchases", "Recover an existing App Store subscription", store.isLoading ? "Restoring…" : account.planName) { Task { await store.restore() } } }
@@ -113,10 +122,20 @@ struct SettingsView: View {
                 Divided {
                     ShareLink(item: "Football Live — live scores and grounded football analysis") { actionLabel("SH", "Share Tempo", "Send the app to a friend") }.buttonStyle(.plain)
                     Button { requestReview() } label: { actionLabel("RT", "Rate on the App Store", "Open the system App Store review prompt") }.buttonStyle(.plain)
-                    if let url = APIConfiguration.termsURL { legalRow("TU", "Terms of Use", url) }
-                    if let url = APIConfiguration.privacyURL { legalRow("PP", "Privacy Policy", url) }
+                }
+                if aiConsent.hasConsent {
+                    Button("Withdraw consent for third-party AI processing") { aiConsent.revoke() }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 10))
+                        .foregroundStyle(AppColors.red)
+                        .padding(.horizontal, 14)
                 }
                 if let message = store.message { Text(message).font(.system(size: 10)).foregroundColor(AppColors.muted) }
+                Mono(text: "Legal", size: 8)
+                Divided {
+                    legalRow("TU", "Terms of Use", APIConfiguration.termsURL!)
+                    legalRow("PP", "Privacy Policy", APIConfiguration.privacyURL!)
+                }
             }.padding(20)
         }
     }
@@ -218,14 +237,29 @@ struct APIKeySettingsView: View {
 
 // MARK: - Tempo Pro
 struct TempoProView: View {
+    @EnvironmentObject var app: AppViewModel
     @EnvironmentObject var account: AccountViewModel
     @ObservedObject private var store = StoreKitService.shared
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
+                HStack {
+                    Button { app.backFromPro() } label: {
+                        Label("Back", systemImage: "chevron.left")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(AppColors.text)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(AppColors.card)
+                            .clipShape(RoundedRectangle(cornerRadius: 7))
+                            .overlay(RoundedRectangle(cornerRadius: 7).stroke(AppColors.border))
+                    }
+                    .buttonStyle(.plain)
+                    Spacer()
+                }
                 Mono(text: "Tempo Pro", size: 9, color: AppColors.lime).padding(.top, 20)
                 Text("See the game move\nbefore it happens.").font(.system(size: 30, weight: .bold)).multilineTextAlignment(.center).foregroundColor(AppColors.text)
-                Text("The momentum engine and AI co-commentator run on every match, in every league you follow.")
+                Text("AI analysis and locally calculated momentum are available when the data provider supplies enough match data.")
                     .font(.system(size: 11)).foregroundColor(AppColors.muted).multilineTextAlignment(.center).frame(maxWidth: 420)
                 if account.isPro {
                     Card(highlight: true) { VStack(spacing: 10) { Image(systemName: "checkmark.seal.fill").font(.system(size: 28)).foregroundColor(AppColors.lime); Text("Tempo Pro is active").font(.title2.bold()); Text("Your implemented Pro features are unlocked on this Mac.").foregroundColor(AppColors.muted) } }.frame(maxWidth: 420)
@@ -234,6 +268,12 @@ struct TempoProView: View {
                 }
                 if let message = store.message { Text(message).font(.system(size: 9, design: .monospaced)).foregroundColor(AppColors.muted) }
                 if !account.isPro { Mono(text: "Subscriptions are billed and managed by the App Store.", size: 7).padding(.top, 6) }
+                HStack(spacing: 18) {
+                    Link("Terms of Use", destination: APIConfiguration.termsURL!)
+                    Link("Privacy Policy", destination: APIConfiguration.privacyURL!)
+                }
+                .font(.system(size: 10))
+                .foregroundStyle(AppColors.muted)
             }.frame(maxWidth: .infinity).padding(20)
         }
     }

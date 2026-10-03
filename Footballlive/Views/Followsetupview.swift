@@ -36,6 +36,7 @@ struct SetupHeading: View {
 
 struct TeamSelectionView: View {
     @EnvironmentObject var vm: FollowSetupViewModel
+    @EnvironmentObject var app: AppViewModel
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             SetupHeading(title: "Who should we watch for you?", subtitle: "Pick your teams. Tempo learns which moments actually pull you in and quiets everything else.")
@@ -51,7 +52,7 @@ struct TeamSelectionView: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
                 ForEach(vm.teams) { t in
                     let on = vm.selectedTeams.contains(t.name)
-                    Button { vm.toggle(t) } label: {
+                    Button { if !vm.toggle(t) { app.openPremium() } } label: {
                         HStack(spacing: 6) {
                             RemoteBadge(url: t.badgeURL, name: t.code, size: 20)
                             Text(t.name).font(.system(size: 11, weight: on ? .semibold : .regular)).foregroundColor(on ? AppColors.text : AppColors.muted)
@@ -74,7 +75,7 @@ struct ExcitementSetupView: View {
     @EnvironmentObject var account: AccountViewModel
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SetupHeading(title: "How loud should Tempo be?", subtitle: "Set the excitement threshold once. Tempo stays silent below it and you can move it any time.")
+            SetupHeading(title: "How loud should Tempo be?", subtitle: "Choose when the app should alert you while it is receiving match data. You can change this any time.")
             Card(highlight: true) {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 12) { ThresholdSlider(value: $account.threshold); Text(account.thresholdText).font(.system(size: 14, weight: .bold, design: .monospaced)).foregroundColor(AppColors.lime) }
@@ -82,7 +83,7 @@ struct ExcitementSetupView: View {
                     Text("Alerts are delivered only when real match data received by the app crosses this threshold.").font(.system(size: 10)).foregroundColor(AppColors.muted)
                 }
             }
-            AlertToggleList(kinds: [.goals, .surge, .everyGoal, .recap])
+            AlertToggleList(kinds: [.goals, .surge, .startingSoon, .recap])
             HStack(spacing: 14) {
                 PillButton(title: "Continue") { vm.next() }.fixedSize()
                 Button { vm.back() } label: { Text("Back").font(.system(size: 10)).foregroundColor(AppColors.muted) }.buttonStyle(.plain)
@@ -99,14 +100,14 @@ struct FeedReadyView: View {
         VStack(spacing: 16) {
             Circle().fill(AppColors.lime).frame(width: 50, height: 50).overlay(Circle().fill(Color.black).frame(width: 14, height: 14))
             Text("Your feed is ready.").font(.system(size: 26, weight: .bold)).foregroundColor(AppColors.text)
-            Text("Tempo is watching \(vm.selectedTeams.count) teams across \(vm.sportsCount) sports and will only interrupt above \(account.thresholdText).").font(.system(size: 11)).foregroundColor(AppColors.muted)
+            Text("Football Live will use available match data for \(vm.selectedTeams.count) followed teams. Live goal and momentum alerts require the app to be running and receiving updates.").font(.system(size: 11)).foregroundColor(AppColors.muted)
             HStack(spacing: 12) {
-                summary("Teams", "\(vm.selectedTeams.count)", "Pinned to the top of your feed")
-                summary("Sports", "\(vm.sportsCount)", "Live across every competition")
-                summary("Threshold", account.thresholdText, "Alerts use real received match activity")
+                summary("Teams", "\(vm.selectedTeams.count)", "Saved as followed teams")
+                summary("Sports", "\(vm.sportsCount)", "Coverage depends on the provider")
+                summary("Threshold", account.thresholdText, "Applied when match data is fetched")
             }
             HStack(spacing: 10) {
-                PillButton(title: "Open Tempo") { vm.complete(); app.open(.live) }.frame(width: 140)
+                PillButton(title: "Open Tempo") { Task { await vm.complete(); app.open(.live) } }.frame(width: 140)
                 if !EntitlementService.shared.isPro { PillButton(title: "View Tempo Pro", filled: false) { app.open(.pro) }.frame(width: 170) }
             }
         }.frame(maxWidth: .infinity)

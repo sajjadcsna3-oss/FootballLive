@@ -112,7 +112,9 @@ struct HighlightPlayerView: View {
                             }
                             PillButton(title: vm.isSaved(highlight) ? "Saved" : "Save", filled: false) { vm.toggleSaved(highlight) }.fixedSize()
                             if let url = highlight.playableURL { ShareLink(item: url, subject: Text(highlight.title)) { Text("Share").font(.system(size: 10, weight: .semibold)).foregroundColor(AppColors.text).padding(.horizontal, 14).padding(.vertical, 8).overlay(Capsule().stroke(AppColors.border)) }.buttonStyle(.plain) }
-                            if highlight.fixtureId != nil { PillButton(title: "Follow teams", filled: false) { Task { await vm.followTeamsForSelected() } }.fixedSize() }
+                            if highlight.fixtureId != nil { PillButton(title: "Follow teams", filled: false) {
+                                Task { if !(await vm.followTeamsForSelected()) { app.openPremium() } }
+                            }.fixedSize() }
                             PillButton(title: "Back to highlights", filled: false) { vm.closePlayer() }.fixedSize()
                         }
                         if let matchError = vm.matchError { Text(matchError).font(.system(size: 10)).foregroundColor(AppColors.red) }
@@ -152,7 +154,11 @@ private struct HighlightUpNext: View {
 
 private struct HighlightAnalysisCard: View {
     @EnvironmentObject var vm: HighlightsViewModel
+    @EnvironmentObject var aiConsent: AIConsentService
     var body: some View {
+        if !aiConsent.hasConsent {
+            AIConsentNotice()
+        } else {
         Card(highlight: true) {
             VStack(alignment: .leading, spacing: 10) {
                 Mono(text: "AI clip breakdown", color: AppColors.lime)
@@ -165,6 +171,7 @@ private struct HighlightAnalysisCard: View {
                 case .failed(let message): Text(message).foregroundColor(AppColors.red)
                 }
             }.font(.system(size: 11))
+        }
         }
     }
 }

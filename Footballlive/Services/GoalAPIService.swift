@@ -50,7 +50,7 @@ actor GoalAPIService {
         if !endpoint.query.isEmpty { components.queryItems = endpoint.query }
         var request = URLRequest(url: components.url!)
         if APIConfiguration.backendBaseURL == nil {
-            guard let key = APIConfiguration.goalAPIKey else { throw NetworkError.missingConfiguration("GOAL_API_KEY") }
+            guard let key = APIConfiguration.goalAPIKey else { throw NetworkError.missingConfiguration("football data") }
             request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         }
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -69,9 +69,9 @@ actor GoalAPIService {
         return try await fixtureList(.fixtures(date: formatter.string(from: Date())), ttl: 120)
     }
     func fixture(id: String) async throws -> Fixture { guard let item = try await root(.fixture(id), cacheFor: 30).object else { throw NetworkError.invalidResponse }; return parseFixture(item) }
-    func events(id: String) async throws -> [MatchEvent] { try await array(.events(id), ttl: 30).enumerated().map(parseEvent) }
-    func cards(id: String) async throws -> [MatchEvent] { try await array(.cards(id), ttl: 30).enumerated().map(parseEvent) }
-    func substitutions(id: String) async throws -> [MatchEvent] { try await array(.substitutions(id), ttl: 30).enumerated().map(parseEvent) }
+    func events(id: String, fixture: Fixture? = nil) async throws -> [MatchEvent] { try await array(.events(id), ttl: 30).enumerated().map { parseEvent($0, fixture: fixture) } }
+    func cards(id: String, fixture: Fixture? = nil) async throws -> [MatchEvent] { try await array(.cards(id), ttl: 30).enumerated().map { parseEvent($0, fixture: fixture) } }
+    func substitutions(id: String, fixture: Fixture? = nil) async throws -> [MatchEvent] { try await array(.substitutions(id), ttl: 30).enumerated().map { parseEvent($0, fixture: fixture) } }
     func statistics(id: String) async throws -> [MatchStatistic] {
         let value = try await root(.statistics(id), cacheFor: 30)
         let rows = value.object?["match"]?.object?["fullTime"]?.array ?? []
@@ -116,7 +116,10 @@ actor GoalAPIService {
             return TeamMetric(name: key.replacingOccurrences(of: "_", with: " ").capitalized, value: raw)
         }
     }
-    func highlights() async throws -> [Highlight] { try await array(.recentVideos, ttl: 300).compactMap(parseHighlight) }
+    func highlights() async throws -> [Highlight] {
+        guard APIConfiguration.allowsHighlightPlayback else { return [] }
+        return try await array(.recentVideos, ttl: 300).compactMap(parseHighlight)
+    }
 
     private func array(_ endpoint: GoalEndpoint, ttl: TimeInterval) async throws -> [JSONValue] { try await root(endpoint, cacheFor: ttl).array ?? [] }
     private func fixtureList(_ endpoint: GoalEndpoint, ttl: TimeInterval) async throws -> [Fixture] { try await array(endpoint, ttl: ttl).compactMap { $0.object.map(parseFixture) } }
@@ -151,9 +154,35 @@ actor GoalAPIService {
         let gf = o["overallLeagueGF"]?.int, ga = o["overallLeagueGA"]?.int
         return Standing(position: o["overallLeaguePosition"]?.int ?? 0, team: Team(id: teamID, name: name, badgeURL: o["teamBadge"]?.url), played: o["overallLeaguePlayed"]?.int ?? 0, won: o["overallLeagueW"]?.int ?? 0, drawn: o["overallLeagueD"]?.int ?? 0, lost: o["overallLeagueL"]?.int ?? 0, goalsFor: gf, goalsAgainst: ga, goalDifference: (gf ?? 0) - (ga ?? 0), points: o["overallLeaguePTS"]?.int ?? 0, form: o["form"]?.string)
     }
-    private func parseEvent(_ pair: (offset: Int, element: JSONValue)) -> MatchEvent {
+    private func parseEvent(_ pair: (offset: Int, element: JSONValue), fixture: Fixture?) -> MatchEvent {
         let o = pair.element.object ?? [:]
-        return MatchEvent(id: "\(o["time"]?.string ?? "")-\(pair.offset)", minute: o["time"]?.int, type: o["type"]?.string ?? "Event", detail: o["info"]?.string ?? o["score"]?.string, teamId: nil, teamName: nil, playerName: o["homeScorer"]?.string ?? o["awayScorer"]?.string, assistName: o["homeAssist"]?.string ?? o["awayAssist"]?.string)
+        func nonempty(_ key: String) -> String? {
+            guard let value = o[key]?.string?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+            return value
+        }
+        let homePerson = nonempty("homeScorer") ?? nonempty("homeFault")
+        let awayPerson = nonempty("awayScorer") ?? nonempty("awayFault")
+        let rawSide = (nonempty("side") ?? nonempty("team") ?? "").lowercased()
+        let sideIsHome = homePerson != nil || rawSide == "home" || rawSide == fixture?.homeTeam.name.lowercased()
+        let sideIsAway = awayPerson != nil || rawSide == "away" || rawSide == fixture?.awayTeam.name.lowercased()
+        let team = sideIsHome ? fixture?.homeTeam : sideIsAway ? fixture?.awayTeam : nil
+        let eventType: String = {
+            if let type = nonempty("type") { return type }
+            if nonempty("card") != nil { return nonempty("card")!.capitalized }
+            if homePerson != nil || awayPerson != nil { return nonempty("homeScorer") != nil || nonempty("awayScorer") != nil ? "Goal" : "Card" }
+            if nonempty("substitution") != nil { return "Substitution" }
+            return "Event"
+        }()
+        return MatchEvent(
+            id: "\(o["time"]?.string ?? "")-\(eventType)-\(pair.offset)",
+            minute: o["timeNum"]?.int ?? o["time"]?.int,
+            type: eventType,
+            detail: nonempty("info") ?? nonempty("score") ?? nonempty("substitution"),
+            teamId: team?.id,
+            teamName: team?.name,
+            playerName: homePerson ?? awayPerson,
+            assistName: nonempty("homeAssist") ?? nonempty("awayAssist")
+        )
     }
     private func parseHighlight(_ value: JSONValue) -> Highlight? {
         guard let o = value.object, let id = o["id"]?.string ?? o["videoId"]?.string else { return nil }

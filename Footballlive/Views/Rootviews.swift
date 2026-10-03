@@ -59,8 +59,11 @@ struct SidebarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
-                Circle().fill(AppColors.lime).frame(width: 24, height: 24)
-                    .overlay(Image(systemName: "soccerball").font(.system(size: 13)).foregroundColor(.black))
+                Image("AppIcon")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 24, height: 24)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("FootBall Live").font(.system(size: 13, weight: .bold, design: .monospaced)).foregroundColor(AppColors.text)
                     Mono(text: "Scores · AI Analysis", size: 6)
@@ -93,24 +96,40 @@ struct SidebarView: View {
                 Text(LocalizedStringKey(item.rawValue)).font(.system(size: 12)).foregroundColor(selected ? AppColors.text : AppColors.muted)
                 Spacer()
                 if item == .live { Text("\(app.liveCount)").font(.system(size: 9, design: .monospaced)).foregroundColor(AppColors.red) }
-                if item == .match { Text("LIVE").font(.system(size: 8, design: .monospaced)).foregroundColor(AppColors.red) }
+                if item == .match, app.selectedFixture?.isLive == true { Text("LIVE").font(.system(size: 8, design: .monospaced)).foregroundColor(AppColors.red) }
                 if item == .commentator { Text("AI").font(.system(size: 8, design: .monospaced)).foregroundColor(AppColors.lime) }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 8).padding(.vertical, 7)
             .background(selected ? Color.white.opacity(0.06) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 6))
-        }.buttonStyle(.plain)
+            .contentShape(Rectangle())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .buttonStyle(.plain)
     }
 
     var proCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Mono(text: "Tempo Pro", size: 8, color: AppColors.lime)
-            Text("Unlimited AI reads, followed teams, and momentum alerts.").font(.system(size: 11)).foregroundColor(AppColors.text.opacity(0.85))
-            PillButton(title: "View Tempo Pro") { app.open(.pro) }
+        Button { app.open(.pro) } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                Mono(text: "Tempo Pro", size: 8, color: AppColors.lime)
+                Text("More AI usage, unlimited followed teams, and momentum alerts while the app receives live data.").font(.system(size: 11)).foregroundColor(AppColors.text.opacity(0.85))
+                Text("View Tempo Pro")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9)
+                    .padding(.horizontal, 14)
+                    .background(AppColors.lime)
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12).background(AppColors.lime.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppColors.lime.opacity(0.35)))
+            .contentShape(Rectangle())
         }
-        .padding(12).background(AppColors.lime.opacity(0.06))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppColors.lime.opacity(0.35)))
+        .buttonStyle(.plain)
     }
 }
 

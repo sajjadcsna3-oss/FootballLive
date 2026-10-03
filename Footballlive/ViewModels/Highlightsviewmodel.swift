@@ -24,17 +24,18 @@ import Combine
         if savedIDs.contains(highlight.id) { savedIDs.remove(highlight.id) } else { savedIDs.insert(highlight.id) }
         UserDefaults.standard.set(Array(savedIDs), forKey: "savedHighlightIDs")
     }
-    func followTeamsForSelected() async {
-        guard let fixture = await fixtureForSelected() else { return }
+    @discardableResult
+    func followTeamsForSelected() async -> Bool {
+        guard let fixture = await fixtureForSelected() else { return true }
         var names = Set(UserDefaults.standard.stringArray(forKey: "followedTeamNames") ?? [])
-        for team in [fixture.homeTeam, fixture.awayTeam] where !names.contains(team.name) {
-            guard EntitlementService.shared.canFollow(teamCount: names.count) else {
-                matchError = L10n.text("The Free plan supports up to 5 followed teams. Tempo Pro removes this limit.")
-                break
-            }
-            names.insert(team.name)
+        let newNames = Set([fixture.homeTeam.name, fixture.awayTeam.name]).subtracting(names)
+        guard EntitlementService.shared.isPro || names.count + newNames.count <= EntitlementService.freeTeamLimit else {
+            matchError = L10n.text("The Free plan supports up to 5 followed teams. Tempo Pro removes this limit.")
+            return false
         }
+        names.formUnion(newNames)
         UserDefaults.standard.set(Array(names), forKey: "followedTeamNames")
+        return true
     }
 
     var categories: [String] {
@@ -84,10 +85,9 @@ import Combine
         if !EntitlementService.shared.canUseAI { analysisState = .failed(L10n.text("Free AI limit reached. Upgrade to Tempo Pro for unlimited reads.")); return }
         analysisState = .loading
         do {
-            async let fixture = service.fixture(id: fixtureID)
-            async let events = service.events(id: fixtureID)
+            let loadedFixture = try await service.fixture(id: fixtureID)
+            async let events = service.events(id: fixtureID, fixture: loadedFixture)
             async let statistics = service.statistics(id: fixtureID)
-            let loadedFixture = try await fixture
             let context = MatchContextBuilder.build(
                 fixture: loadedFixture,
                 statistics: (try? await statistics) ?? [],

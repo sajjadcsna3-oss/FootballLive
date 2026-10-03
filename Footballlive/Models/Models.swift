@@ -4,7 +4,10 @@ import SwiftData
 enum NavItem: String, CaseIterable {
     case live = "Live Scores", match = "Match Center", highlights = "Highlights", leagues = "Leagues", teams = "Teams"
     case commentator = "Co-Commentator", follow = "Follow Setup", alerts = "Alerts & Profile", settings = "Settings", pro = "Tempo Pro"
-    static let sections: [(String, [NavItem])] = [("Live", [.live, .match]), ("Discover", [.highlights, .leagues, .teams]), ("Intelligence", [.commentator]), ("Account", [.follow, .alerts, .settings, .pro])]
+    static var sections: [(String, [NavItem])] {
+        let discovery: [NavItem] = APIConfiguration.allowsHighlightPlayback ? [.highlights, .leagues, .teams] : [.leagues, .teams]
+        return [("Live", [.live, .match]), ("Discover", discovery), ("Intelligence", [.commentator]), ("Account", [.follow, .alerts, .settings, .pro])]
+    }
     var header: (title: String, subtitle: String) {
         switch self {
         case .live: return (rawValue, "Today · All competitions")
@@ -101,12 +104,12 @@ enum AlertKind: String, CaseIterable, Identifiable, Codable {
     var id: String { rawValue }
     var info: (title: String, subtitle: String) {
         switch self {
-        case .goals: return ("Goals for followed teams", "Local alerts when the app receives a followed-team goal")
-        case .surge: return ("Momentum surge", "Local alerts when calculated excitement crosses your threshold")
+        case .goals: return ("Goals for followed teams", "While the app is running and receiving live-score updates")
+        case .surge: return ("Momentum surge", "While an open match is refreshed and crosses your threshold")
         case .everyGoal: return ("Every goal, every league", "Requires a backend for reliable background delivery")
-        case .startingSoon: return ("Match starting soon", "Schedules a local reminder for known fixtures")
+        case .startingSoon: return ("Match starting soon", "Schedules reminders after upcoming fixtures are loaded")
         case .news: return ("Transfer & injury news", "Unavailable until a backend classifies and pushes confirmed reports")
-        case .recap: return ("Weekly recap", "Schedules a weekly local reminder")
+        case .recap: return ("Weekly reminder", "Schedules a weekly reminder to open Football Live")
         }
     }
     var clientAvailable: Bool { self != .everyGoal && self != .news }

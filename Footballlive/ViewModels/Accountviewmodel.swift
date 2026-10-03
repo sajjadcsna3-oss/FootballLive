@@ -43,7 +43,7 @@ import AppKit
                         if on { self.enabledAlerts.insert(kind) }
                         else { self.enabledAlerts.remove(kind) }
 
-                        if on { try? await NotificationService.shared.requestAuthorization() }
+                        if on { _ = try? await NotificationService.shared.requestAuthorization() }
                         if kind == .recap {
                             try? await NotificationService.shared.scheduleWeeklyRecap(enabled: on)
                         }
@@ -76,9 +76,9 @@ import AppKit
     // Claims here describe only functionality that currently exists in the app.
     let plans = [
         PlanInfo(id: "free", name: "Free", price: "$0", unit: "", note: "What you have now", noteColorHex: "7B8088",
-                 features: ["Real live scores and match center", "5 followed teams", "20 shared AI requests per month", "Standard local alerts"], button: "Current plan", isFeatured: false),
+                 features: ["Live scores and match center", "5 followed teams", "20 shared AI requests per month", "Local alerts while data is available"], button: "Current plan", isFeatured: false),
         PlanInfo(id: "monthly", name: "Pro Monthly", price: "—", unit: "/mo", note: "Flexible plan", noteColorHex: "C4F135",
-                 features: ["Unlimited followed teams", "Unlimited AI co-commentary", "Unlimited AI table and highlight reads", "Momentum-surge alerts"], button: "Choose monthly", isFeatured: true),
+                 features: ["Unlimited followed teams", "Higher AI usage subject to service limits", "AI match and table reads", "In-app momentum-surge alerts"], button: "Choose monthly", isFeatured: true),
         PlanInfo(id: "annual", name: "Pro Annual", price: "—", unit: "/yr", note: "Annual billing", noteColorHex: "3B6FE8",
                  features: ["Everything in Pro Monthly", "One annual App Store subscription"], button: "Choose annual", isFeatured: false)]
 

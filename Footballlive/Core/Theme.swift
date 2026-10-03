@@ -55,7 +55,7 @@ struct RemoteBadge: View {
     let name: String
     var size: CGFloat = 24
     var body: some View {
-        AsyncImage(url: url) { phase in
+        AsyncImage(url: APIConfiguration.allowsThirdPartyVisualAssets ? url : nil) { phase in
             if let image = phase.image {
                 image.resizable().scaledToFit().padding(size * 0.06)
             } else {

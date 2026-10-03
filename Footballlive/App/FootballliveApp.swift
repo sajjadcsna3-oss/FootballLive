@@ -12,9 +12,11 @@ import AppKit
 // MARK: - App entry. All ViewModels are created once here and shared through the environment.
 @main
 struct FootBallLiveApp: App {
+    @State private var isShowingSplash = true
     @StateObject private var app = AppViewModel()
     @StateObject private var account = AccountViewModel()
     @StateObject private var entitlements = EntitlementService.shared
+    @StateObject private var aiConsent = AIConsentService.shared
     @StateObject private var live = LiveScoresViewModel()
     @StateObject private var match = MatchCenterViewModel()
     @StateObject private var highlights = HighlightsViewModel()
@@ -26,16 +28,34 @@ struct FootBallLiveApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ZStack {
+                ContentView()
+
+                if isShowingSplash {
+                    SplashView()
+                        .transition(.opacity)
+                        .zIndex(1)
+                }
+            }
                 .environmentObject(app).environmentObject(account).environmentObject(live)
                 .environmentObject(match).environmentObject(highlights).environmentObject(leagues)
                 .environmentObject(commentator).environmentObject(follow)
                 .environmentObject(entitlements)
+                .environmentObject(aiConsent)
                 .frame(minWidth: 1000, minHeight: 640)
                 .preferredColorScheme(account.darkAppearance ? .dark : .light)
                 .environment(\.locale, account.locale)
                 .environment(\.layoutDirection, account.layoutDirection)
                 .modelContainer(for: [FollowedTeam.self, UserPreferences.self])
+                .task {
+                    guard isShowingSplash else { return }
+                    try? await Task.sleep(for: .seconds(2.2))
+                    guard !Task.isCancelled else { return }
+                    withAnimation(.easeOut(duration: 0.35)) {
+                        isShowingSplash = false
+                    }
+                    await NotificationService.shared.reconcileSavedPreferences()
+                }
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1180, height: 760)
@@ -62,7 +82,7 @@ private struct MenuBarScoreView: View {
             else {
                 ForEach(live.leagues.flatMap(\.matches).prefix(5)) { fixture in
                     Button { app.open(fixture: fixture); NSApp.activate(ignoringOtherApps: true) } label: {
-                        HStack { Text("\(fixture.homeTeam.name) \(fixture.homeScore ?? 0)–\(fixture.awayScore ?? 0) \(fixture.awayTeam.name)"); Spacer(); Text(fixture.displayStatus) }
+                        HStack { Text("\(fixture.homeTeam.name) \(fixture.homeScore.map(String.init) ?? "–")–\(fixture.awayScore.map(String.init) ?? "–") \(fixture.awayTeam.name)"); Spacer(); Text(fixture.displayStatus) }
                     }.buttonStyle(.plain)
                 }
             }

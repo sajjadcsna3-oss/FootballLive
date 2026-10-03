@@ -123,19 +123,32 @@ import Combine
         do { async let details = service.team(selected.id); async let players = service.teamPlayers(selected.id); async let upcoming = service.teamFixtures(selected.id); async let results = service.teamResults(selected.id); async let metrics = service.teamStatistics(selected.id); team = try await details; squad = (try? await players) ?? []; fixtures = (try? await upcoming) ?? []; teamResults = (try? await results) ?? []; teamMetrics = (try? await metrics) ?? []; isFollowing = UserDefaults.standard.stringArray(forKey: "followedTeamNames")?.contains(selected.name) == true; if isFollowing, Set(UserDefaults.standard.stringArray(forKey: "enabledAlerts") ?? []).contains(AlertKind.startingSoon.rawValue) { for fixture in fixtures.prefix(10) { try? await NotificationService.shared.scheduleStartingSoon(for: fixture) } }; teamState = .loaded }
         catch NetworkError.offline { teamState = .offline } catch { teamState = .failed(error.localizedDescription) }
     }
-    func toggleFollow() {
-        guard let team else { return }
+    @discardableResult
+    func toggleFollow() -> Bool {
+        guard let team else { return true }
         var names = Set(UserDefaults.standard.stringArray(forKey: "followedTeamNames") ?? [])
+        var ids = Set(UserDefaults.standard.stringArray(forKey: "followedTeamIDs") ?? [])
         followMessage = nil
-        if names.contains(team.name) { names.remove(team.name) }
+        if names.contains(team.name) {
+            names.remove(team.name)
+            ids.remove(team.id)
+            Task { await NotificationService.shared.cancelStartingSoon(forTeamID: team.id) }
+        }
         else {
             guard EntitlementService.shared.canFollow(teamCount: names.count) else {
                 followMessage = L10n.text("The Free plan supports up to 5 followed teams. Tempo Pro removes this limit.")
-                return
+                return false
             }
             names.insert(team.name)
+            ids.insert(team.id)
+            if Set(UserDefaults.standard.stringArray(forKey: "enabledAlerts") ?? []).contains(AlertKind.startingSoon.rawValue) {
+                let knownFixtures = fixtures
+                Task { for fixture in knownFixtures.prefix(10) { try? await NotificationService.shared.scheduleStartingSoon(for: fixture) } }
+            }
         }
         UserDefaults.standard.set(Array(names), forKey: "followedTeamNames")
+        UserDefaults.standard.set(Array(ids), forKey: "followedTeamIDs")
         isFollowing = names.contains(team.name)
+        return true
     }
 }
